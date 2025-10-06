@@ -1,0 +1,94 @@
+import mams.web.HttpResponse;
+import mams.JSONConverter;          
+import mams.JSONBuilder;          
+import astra.jena.*;
+import com.fasterxml.jackson.databind.JsonNode;
+
+agent Shared extends mams.IntegratedInbox {
+    
+    //Utility modules
+    module System system;
+    module Console console;
+    module Debug debug;
+    module Strings strings; //See https://gitlab.com/astra-language/astra-core/-/blob/master/astra-apis/src/main/java/astra/lang/Strings.java?ref_type=heads
+
+    module Prelude prelude;
+    module Math m;
+
+    module Messaging messaging;
+
+    module JSONBuilder builder;
+    module JSONConverter converter;
+    module mams.HttpUtils httpUtils;
+
+    module RDFSchema("http://www.w3.org/1999/02/22-rdf-syntax-ns#") rdf; 
+    module RDFSchema("http://www.w3.org/2011/http#") http; //Use this for form actions (i.e. what is the HTTP method, POST, PUT, GET?)
+    module RDFSchema("https://www.w3.org/2019/wot/hypermedia#") hypermedia; //Use this for link and form controls 
+
+    module RDFSchema("http://localhost:8083/tic-tac-toe#") ttt; //Use this for game information
+    module RDFSchema("https://schema.org/") schema; //Use this to check for errors
+    
+    types ont {
+        //Self-knowledge
+        formula agent_attributes(string, string); //What does this agent know about itself? Attribute Name, value pairs. E.g. @id = "http://localhost:9000/AgentOne"
+    }
+
+    types game_play {
+        //Housekeeping
+        formula api_index_url(string); //The entry point to the game API
+
+        //Game is in progress
+        formula game(string, string, string); //Active game: the Game ID and the agent role, and the opponent url
+        // which may be different to the entry point. This stores the game ID, and the entry point url
+
+        //Actions inferred from API
+        formula form_actions(string, string, list); //(string, string, list) -> (URL of action, method name ("POST" or "PUT"), required fields)
+        formula link_actions(string); //(string) -> (URL of action)
+
+        //Error handling
+        formula http_fail_count(int);
+        formula failure_threshold(int);
+    }
+    
+    /**
+     * Part 1-d
+     * Means-end reasoning
+     * GOAL: !form_actions
+     * 
+     */
+    rule +!form_actions(string url) {
+        //Get any forms - i.e. endpoints that require PUT or POST requests, with parameters
+        // There won't always be forms
+        foreach(hypermedia.Form(url, string form_id)){
+            //Get the URL
+            list required_actions = [];
+            //What is the target of the form
+            query(hypermedia.hasTarget(form_id, string form_url));
+            //Is it PUT or POST
+            query(http.methodName(form_id, string http_method));
+            //What are the actions I have to do? What form parameters do I need to fill in?
+            foreach(hypermedia.properties(form_id, string propertiesId)) {
+                query(hypermedia.name(propertiesId, string requiredField)); 
+                required_actions = required_actions + [requiredField];
+            }
+
+            +form_actions(form_url, http_method, required_actions); 
+        }
+    }
+
+    /**
+     * Part 1-d
+     * Means-end reasoning
+     * GOAL: !link_actions
+     */
+    rule +!link_actions(string url) {
+        //Get any links - i.e. endpoints that require a GET requests
+        foreach(hypermedia.Link(url, string link_id)){
+            
+            //What is the target of the link
+            string link_url = "";
+            query(hypermedia.hasTarget(link_id, string target));
+            +link_actions(target); 
+        }
+    }
+}

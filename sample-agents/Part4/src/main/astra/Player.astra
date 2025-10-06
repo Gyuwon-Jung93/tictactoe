@@ -1,0 +1,361 @@
+import mams.web.HttpResponse;
+import mams.JSONConverter;
+import mams.JSONBuilder;
+import astra.jena.*;
+import com.fasterxml.jackson.databind.JsonNode;
+
+agent Player extends Shared {
+
+    //Apache Jena Knowledge Stores
+    module KnowledgeStore knowledgeStoreGame; //Agent-Game knowledge
+    
+    types player{
+        formula turn(boolean);
+        formula found_result(boolean);
+        formula move_made(string);
+        formula game_completed(string,string,string);
+        formula game_started(string);
+        formula reregister();
+    }
+
+    types game_state {
+        formula move(string, string);    // square, player
+        formula free(string);            // empty square
+        formula last_move(string);       // store last move
+    }
+
+    types errors {
+        formula api_error_count(int);      // Count API errors
+        formula api_unavailable(boolean);   // Track API availability
+        formula connection_lost(string);    // Track which endpoint failed
+        formula api_failure(string);        // Track API failure message
+    }
+
+    initial http_fail_count(0), failure_threshold(10);
+    initial api_error_count(0);
+    initial api_unavailable(false);
+
+    rule +!main([string url]) {
+        +api_index_url(url);
+
+        //Set up as a MAMS agent
+        MAMSAgent::!init();
+        MAMSAgent::!created("base");
+        IntegratedInbox::!created("inbox");
+
+        //Initialise my knowledge about myself
+        !itemProperty("base", "uri", funct agentUri);
+        string uri = F.valueAsString(agentUri, 0);
+        //This is what I know about myself - I have an @id field
+        +agent_attributes("@id", uri);
+        //I am an agent of the type defined in the ttt ontology
+        +agent_attributes("@type", "ttt:Agent");
+        //This is the ttt ontology
+        string ontology = ttt.qualifiedName("");
+        +agent_attributes("@context", "{\"ttt\": \"" + ontology + "\"}");
+
+        !get_index_page();
+    }
+
+    rule +!update_board_state(string url) {
+        // Remove existing state
+        foreach(move(string sq, string pl)) {
+            -move(sq, pl);
+        }
+        foreach(free(string sq)) {
+            -free(sq);
+        }
+
+        // Initialise all possible squares
+        list squares = ["11","12","13","21","22","23","31","32","33"];
+        forall(string sq : squares) {
+            +free(sq);
+        }
+
+        // Analyse current board state
+        foreach(ttt.hasMove(url, string move_id)) {
+            query(ttt.inSquare(move_id, string square));
+            query(ttt.moveTakenBy(move_id, string player));
+            +move(square, player);
+            -free(square);
+        }
+    }
+
+    rule +!make_move(string form_url, string method, string id) {}
+
+    rule +!get_index_page() : ~game(string id, string role, string opponent) & api_index_url(string game_url) {
+        try {
+            knowledgeStoreGame.getKnowledge(game_url, "JSON-LD");
+        } recover {
+            console.println("Failed to access API at: " + game_url);
+            !handle_api_error(game_url);
+        }
+    }
+
+        rule +!handle_api_error(string endpoint) {
+        foreach(api_error_count(int count)) {
+            -api_error_count(count);
+            +api_error_count(count + 1);
+            
+            if(count >= 10) {  // Use direct number instead of variable
+                +api_unavailable(true);
+                +connection_lost(endpoint);
+                console.println("API appears to be unavailable after " + count + " attempts");
+                send(inform, "main", api_failure(endpoint));
+            } else {
+                console.println("API error count: " + (count + 1) + "/10");
+                system.sleep(1000);  // Wait before retry
+                !get_index_page();
+            }
+        }
+    }
+
+   rule $knowledgeStoreGame.read(string url) : game(string id, string role, string opponent) & strings.contains(url, "result") {
+    try {
+        if (ttt.TicTacToeResult(url, string winner)) {
+            foreach(agent_attributes("@id", string myUri)) {
+                if (strings.equal(winner, role)) {
+                    console.println("I won the game!");
+                    send(inform, "main", game_completed(id, myUri, "win"));
+                } else {
+                    console.println("I lost the game");
+                    send(inform, "main", game_completed(id, myUri, "lose"));
+                }
+            }
+        } else {
+            console.println("Game ended in a draw");
+            foreach(agent_attributes("@id", string myUri)) {
+                send(inform, "main", game_completed(id, myUri, "draw"));
+            }
+        }
+        
+        !cleanup_game_state(id, role, opponent);
+        
+    } recover {
+        console.println("Error processing game result");
+        !handle_api_error(url);
+    }
+}
+
+    rule +!cleanup_game_state(string id, string role, string opponent) {
+        // Remove game-related beliefs
+        -game(id, role, opponent);
+        -turn(true);
+        
+        // Clear move history
+        foreach(move(string square, string player)) {
+            -move(square, player);
+        }
+        foreach(free(string square)) {
+            -free(square);
+        }
+        foreach(last_move(string move)) {
+            -last_move(move);
+        }
+        
+        // Reset error counters for next game
+        -api_error_count(int count);
+        +api_error_count(0);
+        -api_unavailable(true);
+        
+        !clear_knowledge();
+        console.println("Game state cleanup completed");
+    }
+
+    rule $knowledgeStoreGame.read(string url) : game(string id, string role, string opponent) {
+        try {
+            console.println("Processing board state for game: " + id);
+            
+            !form_actions(url);
+            !link_actions(url);
+            
+            system.sleep(1000);
+
+            if(link_actions(string link_url) & strings.contains(link_url,"result")) {
+                console.println("Found result endpoint, checking result...");
+                knowledgeStoreGame.getKnowledge(link_url, "JSON-LD");
+                +found_result(true);
+            } else {
+                if(form_actions(string form_url, string method, list required)) {
+                    !execute_move(form_url, method);
+                }
+                send(inform, opponent, turn(true));
+            }
+            
+            -turn(true);
+            !clear_knowledge();
+            console.println("Turn completed");
+            
+        } recover {
+            console.println("Error during turn processing");
+            !handle_api_error(url);
+        }
+    }
+
+    rule +!execute_move(string form_url, string method) {
+        try {
+            console.println("Performing move...");
+            JsonNode bodyJson = builder.createObject();
+            query(agent_attributes("@id", string agentURL));
+            builder.addProperty(bodyJson, "@id", agentURL);
+            string bodyStr = builder.toJsonString(bodyJson);
+            
+            if (strings.equal(method, "POST")) {
+                MAMSAgent::!post(form_url, bodyStr, HttpResponse response);
+                console.println("Move response: " + httpUtils.bodyAsString(response));
+                +move_made(form_url);
+            } else if (strings.equal(method, "PUT")) {
+                MAMSAgent::!put(form_url, bodyStr, HttpResponse response);
+                console.println("Move response: " + httpUtils.bodyAsString(response));
+                +move_made(form_url);
+            }
+        } recover {
+            console.println("Failed to perform move!");
+            !handle_api_error(form_url);
+        }
+    }
+
+    rule $knowledgeStoreGame.read(string url) {
+        console.println("Processed information from " + url);
+        !form_actions(url);
+        !link_actions(url);
+    }
+
+    rule +form_actions(string form_url, string http_method, list required_actions) : 
+        ~game(string id, string role, string opponent) & 
+        strings.endsWith(form_url, "register") & 
+        http_fail_count(int count) {
+
+        try {
+            console.println("Attempting to register with URL: " + form_url);
+            JsonNode bodyJson = builder.createObject();
+            
+            foreach(agent_attributes("@id", string uri)) {
+                console.println("Using agent URI: " + uri);
+                builder.addProperty(bodyJson, "@id", uri);
+            }
+            
+            string bodyStr = builder.toJsonString(bodyJson);
+            console.println("Request body: " + bodyStr);
+            
+            if (strings.equal(http_method, "POST")) {
+                console.println("Sending POST request...");
+                MAMSAgent::!post(form_url, bodyStr, HttpResponse response);
+                console.println("Registration response: " + httpUtils.bodyAsString(response));
+            } else {
+                console.println("Sending PUT request...");
+                MAMSAgent::!put(form_url, bodyStr, HttpResponse response);
+                console.println("Registration response: " + httpUtils.bodyAsString(response));
+            }
+            
+            !clear_knowledge();
+            
+        } recover {
+            console.println("Registration failed. Attempt: " + (count + 1));
+            -http_fail_count(count);
+            +http_fail_count(count + 1);
+            +form_actions(form_url, http_method, required_actions);
+        }
+    }
+
+    rule +form_actions(string form_url, string http_method, list required_actions) : 
+        game(string id, string role, string opponent) & 
+        strings.endsWith(form_url, "register") & 
+        http_fail_count(int count) {
+
+        try {
+            console.println("Attempting to register with URL: " + form_url);
+            JsonNode bodyJson = builder.createObject();
+            
+            foreach(agent_attributes("@id", string uri)) {
+                console.println("Using agent URI: " + uri);
+                builder.addProperty(bodyJson, "@id", uri);
+            }
+            
+            string bodyStr = builder.toJsonString(bodyJson);
+            console.println("Request body: " + bodyStr);
+            
+            if (strings.equal(http_method, "POST")) {
+                console.println("Sending POST request...");
+                MAMSAgent::!post(form_url, bodyStr, HttpResponse response);
+                console.println("Registration response: " + httpUtils.bodyAsString(response));
+            } else {
+                console.println("Sending PUT request...");
+                MAMSAgent::!put(form_url, bodyStr, HttpResponse response);
+                console.println("Registration response: " + httpUtils.bodyAsString(response));
+            }
+            
+            !clear_knowledge();
+            
+        } recover {
+            console.println("Registration failed. Attempt: " + (count + 1));
+            -http_fail_count(count);
+            +http_fail_count(count + 1);
+            +form_actions(form_url, http_method, required_actions);
+        }
+    }
+
+
+    rule +http_fail_count(int i) : failure_threshold(int j) & (i >= j) {
+        console.println("Too many failures! Shutting down");
+        system.exit();
+    }
+    rule @message(inform, string sender, reregister()) {
+    foreach(api_index_url(string url)) {
+        try {
+            JsonNode bodyJson = builder.createObject();
+            foreach(agent_attributes("@id", string uri)) {
+                builder.addProperty(bodyJson, "@id", uri);
+            }
+            string bodyStr = builder.toJsonString(bodyJson);
+            MAMSAgent::!post(url + "register", bodyStr, HttpResponse response);
+            console.println("Re-registered for next match");
+        } recover {
+            console.println("Failed to re-register!");
+        }
+    }
+}
+
+    rule +!clear_knowledge() {
+        knowledgeStoreGame.clear();
+        foreach(form_actions(string anyForm, string method_name, list any_list)) {
+            -form_actions(anyForm, method_name, any_list);
+        }
+        foreach(link_actions(string anyLink)) {
+            -link_actions(anyLink);
+        }
+    }
+
+    rule @message(inform, string sender, game(string id, string role, string opponent)) {
+        console.println("===Game setting check===");
+        foreach(game(string old_id, string old_role, string old_opponent)) {
+            -game(old_id, old_role, old_opponent);
+        }
+        -turn(true);
+        !clear_knowledge();
+
+        console.println("I've got the game " + id + " with the role " + role + " and opponent " + opponent);
+
+        +game(id, role, opponent);
+
+        if(strings.contains(role, "XPlayerRole")) {
+            +turn(true);
+            console.println("It's my turn as X player");
+        }
+    }
+
+    rule @message(inform, string sender, turn(true)) {
+        if(game(string id, string role, string opponent) & api_index_url(string url)) {
+            +turn(true);
+        }
+    }
+
+    rule +turn(true) : game(string id, string role, string opponent) & api_index_url(string url) {
+        console.println("Fetching board state for game ID: " + id);
+        knowledgeStoreGame.getKnowledge(url + "Board/" + id, "JSON-LD");
+    }
+
+    rule -turn(true) {
+        !clear_knowledge();
+    }
+}

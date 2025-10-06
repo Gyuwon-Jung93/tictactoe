@@ -1,0 +1,76 @@
+import mams.web.HttpResponse;
+import mams.JSONConverter;
+import mams.JSONBuilder;
+import astra.jena.*;
+import com.fasterxml.jackson.databind.JsonNode;
+agent Opponent extends Player {
+    // make_move rule redefine
+    rule +!handle_move(string form_url, string method, string id) : game(id, string role, string opponent) {
+        console.println("Opponent handle_move called");
+        // 1.centre 
+        if(free("22")) {
+            console.println("Opponent: Center is free, taking it!");
+            +last_move("22");
+            +move("22", "ttt:OPlayerRole"); // move belief 추가
+            -free("22");  // free belief 제거
+        }
+        // 2. corner prefer
+        else if(~last_move(string anyMove)) {
+            !try_corners();
+        }
+        // 3. the last cell
+        else if(~last_move(string anyMove)) {
+            !take_any_free();
+        }
+
+        // selected move run
+        if(last_move(string chosen_square)) {
+            console.println("Opponent making move to square: " + chosen_square);
+            JsonNode bodyJson = builder.createObject();
+            query(agent_attributes("@id", string agentURL));
+            builder.addProperty(bodyJson, "@id", agentURL);
+            builder.addProperty(bodyJson, "ttt:square", chosen_square);
+            string bodyStr = builder.toJsonString(bodyJson);                
+            
+            console.println("Opponent move request body: " + bodyStr);
+            
+            if (strings.equal(method, "POST")) {
+                MAMSAgent::!post(form_url, bodyStr, HttpResponse response);
+                console.println("Opponent moved to: " + chosen_square);
+            } else if (strings.equal(method, "PUT")) {
+                MAMSAgent::!put(form_url, bodyStr, HttpResponse response);
+                console.println("Opponent moved to: " + chosen_square);
+            }
+            -last_move(chosen_square);
+
+        }
+    }
+
+    // corner select strategy
+    rule +!try_corners() {
+        //try simple corner in order 
+        if(free("11")) {
+            +last_move("11");
+        } else if(free("13")) {
+            +last_move("13");
+        } else if(free("31")) {
+            +last_move("31");
+        } else if(free("33")) {
+            +last_move("33");
+        }
+    }
+
+    // select the rest cell
+    rule +!take_any_free() {
+        // find a empty cell in order
+        if(free("12")) {
+            +last_move("12");
+        } else if(free("21")) {
+            +last_move("21");
+        } else if(free("23")) {
+            +last_move("23");
+        } else if(free("32")) {
+            +last_move("32");
+        }
+    }
+}

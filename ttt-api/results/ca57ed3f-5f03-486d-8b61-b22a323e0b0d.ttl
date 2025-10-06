@@ -1,0 +1,253 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix tic-tac-toe: <http://localhost:8083/tic-tac-toe#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://localhost:8083/Board/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Board,
+        owl:NamedIndividual ;
+    tic-tac-toe:hasSquare <http://localhost:8083/Square11/ca57ed3f-5f03-486d-8b61-b22a323e0b0d>,
+        <http://localhost:8083/Square12/ca57ed3f-5f03-486d-8b61-b22a323e0b0d>,
+        <http://localhost:8083/Square13/ca57ed3f-5f03-486d-8b61-b22a323e0b0d>,
+        <http://localhost:8083/Square21/ca57ed3f-5f03-486d-8b61-b22a323e0b0d>,
+        <http://localhost:8083/Square22/ca57ed3f-5f03-486d-8b61-b22a323e0b0d>,
+        <http://localhost:8083/Square23/ca57ed3f-5f03-486d-8b61-b22a323e0b0d>,
+        <http://localhost:8083/Square31/ca57ed3f-5f03-486d-8b61-b22a323e0b0d>,
+        <http://localhost:8083/Square32/ca57ed3f-5f03-486d-8b61-b22a323e0b0d>,
+        <http://localhost:8083/Square33/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+<http://localhost:8083/tic-tac-toe> a owl:Ontology ;
+    rdfs:label "Tic-tac-toe ontology" ;
+    rdfs:seeAlso "https://dbpedia.org/page/Tic-tac-toe" .
+
+tic-tac-toe:hasFirstMove a owl:ObjectProperty ;
+    rdfs:subPropertyOf tic-tac-toe:hasMove .
+
+tic-tac-toe:hasID a owl:AsymmetricProperty,
+        owl:FunctionalProperty,
+        owl:IrreflexiveProperty,
+        owl:ObjectProperty ;
+    rdfs:domain tic-tac-toe:Game .
+
+tic-tac-toe:hasResult a owl:AsymmetricProperty,
+        owl:FunctionalProperty,
+        owl:IrreflexiveProperty,
+        owl:ObjectProperty ;
+    rdfs:domain tic-tac-toe:Game .
+
+tic-tac-toe:hasSquare a owl:ObjectProperty ;
+    rdfs:range tic-tac-toe:Square .
+
+tic-tac-toe:nextMove a owl:AsymmetricProperty,
+        owl:FunctionalProperty,
+        owl:IrreflexiveProperty,
+        owl:ObjectProperty ;
+    rdfs:domain tic-tac-toe:Move ;
+    rdfs:range tic-tac-toe:Move ;
+    rdfs:subPropertyOf owl:topObjectProperty .
+
+<http://127.0.0.1:9000/NewPlayer> a tic-tac-toe:OPlayerRole .
+
+<http://127.0.0.1:9000/Opponent> a tic-tac-toe:XPlayerRole .
+
+tic-tac-toe:Board a owl:Class ;
+    rdfs:comment "Descriptive placeholder for querying the state of all of the squares in the game"^^xsd:string .
+
+tic-tac-toe:Event a owl:Class .
+
+tic-tac-toe:TicTacToeResult a owl:DatatypeProperty,
+        owl:FunctionalProperty ;
+    rdfs:domain [ a owl:Restriction ;
+            owl:onDataRange xsd:string ;
+            owl:onProperty tic-tac-toe:TicTacToeResult ;
+            owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] ;
+    rdfs:range xsd:string .
+
+tic-tac-toe:hasMove a owl:AsymmetricProperty,
+        owl:IrreflexiveProperty,
+        owl:ObjectProperty ;
+    rdfs:domain tic-tac-toe:AgentRole,
+        tic-tac-toe:Game ;
+    rdfs:range tic-tac-toe:Move ;
+    owl:inverseOf tic-tac-toe:subEventOf .
+
+tic-tac-toe:inSquare a owl:AsymmetricProperty,
+        owl:IrreflexiveProperty,
+        owl:ObjectProperty ;
+    rdfs:domain tic-tac-toe:Move ;
+    rdfs:range tic-tac-toe:Square .
+
+tic-tac-toe:moveTakenBy a owl:AsymmetricProperty,
+        owl:FunctionalProperty,
+        owl:IrreflexiveProperty,
+        owl:ObjectProperty ;
+    rdfs:domain tic-tac-toe:Move ;
+    rdfs:range tic-tac-toe:AgentRole .
+
+tic-tac-toe:performedBy a owl:AsymmetricProperty,
+        owl:FunctionalProperty,
+        owl:IrreflexiveProperty,
+        owl:ObjectProperty ;
+    rdfs:domain tic-tac-toe:AgentRole ;
+    rdfs:range tic-tac-toe:Agent .
+
+<http://localhost:8083/Square11/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Square11,
+        owl:NamedIndividual ;
+    tic-tac-toe:moveTakenBy tic-tac-toe:OPlayerRole ;
+    tic-tac-toe:nextMove <http://localhost:8083/Square31/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> ;
+    tic-tac-toe:subEventOf <http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+<http://localhost:8083/Square12/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Square12,
+        owl:NamedIndividual ;
+    tic-tac-toe:moveTakenBy tic-tac-toe:XPlayerRole ;
+    tic-tac-toe:nextMove <http://localhost:8083/Square13/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> ;
+    tic-tac-toe:subEventOf <http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+<http://localhost:8083/Square13/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Square13,
+        owl:NamedIndividual ;
+    tic-tac-toe:moveTakenBy tic-tac-toe:OPlayerRole ;
+    tic-tac-toe:nextMove <http://localhost:8083/Square22/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> ;
+    tic-tac-toe:subEventOf <http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+<http://localhost:8083/Square21/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Square21,
+        owl:NamedIndividual ;
+    tic-tac-toe:moveTakenBy tic-tac-toe:XPlayerRole ;
+    tic-tac-toe:subEventOf <http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+<http://localhost:8083/Square22/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Square22,
+        owl:NamedIndividual ;
+    tic-tac-toe:moveTakenBy tic-tac-toe:XPlayerRole ;
+    tic-tac-toe:nextMove <http://localhost:8083/Square23/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> ;
+    tic-tac-toe:subEventOf <http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+<http://localhost:8083/Square23/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Square23,
+        owl:NamedIndividual ;
+    tic-tac-toe:moveTakenBy tic-tac-toe:OPlayerRole ;
+    tic-tac-toe:nextMove <http://localhost:8083/Square33/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> ;
+    tic-tac-toe:subEventOf <http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+<http://localhost:8083/Square31/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Square31,
+        owl:NamedIndividual ;
+    tic-tac-toe:moveTakenBy tic-tac-toe:XPlayerRole ;
+    tic-tac-toe:nextMove <http://localhost:8083/Square32/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> ;
+    tic-tac-toe:subEventOf <http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+<http://localhost:8083/Square32/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Square32,
+        owl:NamedIndividual ;
+    tic-tac-toe:moveTakenBy tic-tac-toe:OPlayerRole ;
+    tic-tac-toe:nextMove <http://localhost:8083/Square21/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> ;
+    tic-tac-toe:subEventOf <http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+<http://localhost:8083/Square33/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Square33,
+        owl:NamedIndividual ;
+    tic-tac-toe:moveTakenBy tic-tac-toe:XPlayerRole ;
+    tic-tac-toe:nextMove <http://localhost:8083/Square11/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> ;
+    tic-tac-toe:subEventOf <http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> .
+
+tic-tac-toe:Agent a owl:Class ;
+    owl:disjointWith tic-tac-toe:AgentRole,
+        tic-tac-toe:Square .
+
+tic-tac-toe:Square11 a owl:Class ;
+    rdfs:comment "Represents the top left hand square in a tic-tac-toe board"@en ;
+    rdfs:subClassOf tic-tac-toe:Square .
+
+tic-tac-toe:Square12 a owl:Class ;
+    rdfs:comment "Represents the top middle square in a tic-tac-toe board"@en ;
+    rdfs:subClassOf tic-tac-toe:Square .
+
+tic-tac-toe:Square13 a owl:Class ;
+    rdfs:comment "Represents the top right hand square in a tic-tac-toe board"@en ;
+    rdfs:subClassOf tic-tac-toe:Square .
+
+tic-tac-toe:Square21 a owl:Class ;
+    rdfs:comment "Represents the middle left hand square in a tic-tac-toe board"@en ;
+    rdfs:subClassOf tic-tac-toe:Square .
+
+tic-tac-toe:Square22 a owl:Class ;
+    rdfs:comment "Represents the middle square in a tic-tac-toe board"@en ;
+    rdfs:subClassOf tic-tac-toe:Square .
+
+tic-tac-toe:Square23 a owl:Class ;
+    rdfs:comment "Represents the middle right hand square in a tic-tac-toe board"@en ;
+    rdfs:subClassOf tic-tac-toe:Square .
+
+tic-tac-toe:Square31 a owl:Class ;
+    rdfs:comment "Represents the bottom left hand square in a tic-tac-toe board"@en ;
+    rdfs:subClassOf tic-tac-toe:Square .
+
+tic-tac-toe:Square32 a owl:Class ;
+    rdfs:comment "Represents the bottom middle square in a tic-tac-toe board"@en ;
+    rdfs:subClassOf tic-tac-toe:Square .
+
+tic-tac-toe:Square33 a owl:Class ;
+    rdfs:comment "Represents the bottom right hand square in a tic-tac-toe board"@en ;
+    rdfs:subClassOf tic-tac-toe:Square .
+
+tic-tac-toe:providesAgentRole a owl:AsymmetricProperty,
+        owl:IrreflexiveProperty,
+        owl:ObjectProperty ;
+    rdfs:domain tic-tac-toe:Game ;
+    rdfs:range tic-tac-toe:AgentRole .
+
+tic-tac-toe:subEventOf a owl:AsymmetricProperty,
+        owl:FunctionalProperty,
+        owl:IrreflexiveProperty,
+        owl:ObjectProperty ;
+    rdfs:domain tic-tac-toe:Move ;
+    rdfs:range tic-tac-toe:Game .
+
+tic-tac-toe:Move a owl:Class ;
+    rdfs:seeAlso "The event in a game of a player (either in the X Player Role or O Player Role) placing their mark (X or O) in a square"@en ;
+    rdfs:subClassOf tic-tac-toe:Game ;
+    owl:equivalentClass [ a owl:Class ;
+            owl:intersectionOf ( [ a owl:Restriction ;
+                        owl:onClass tic-tac-toe:Square ;
+                        owl:onProperty tic-tac-toe:inSquare ;
+                        owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] [ a owl:Restriction ;
+                        owl:onClass tic-tac-toe:AgentRole ;
+                        owl:onProperty tic-tac-toe:moveTakenBy ;
+                        owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] [ a owl:Restriction ;
+                        owl:onClass tic-tac-toe:Game ;
+                        owl:onProperty tic-tac-toe:subEventOf ;
+                        owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] ) ] .
+
+tic-tac-toe:OPlayerRole a owl:Class ;
+    rdfs:subClassOf tic-tac-toe:AgentRole ;
+    owl:disjointWith tic-tac-toe:XPlayerRole .
+
+tic-tac-toe:AgentRole a owl:Class ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onClass tic-tac-toe:Agent ;
+            owl:onProperty tic-tac-toe:performedBy ;
+            owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] ;
+    owl:disjointWith tic-tac-toe:Square .
+
+tic-tac-toe:Game a owl:Class ;
+    rdfs:comment "A tic-tac-toe game, with 2 players performing O Player Role and X Player Role, whereby players take it in turn to perform a move in a square of the board until one player has a row of 3 marks either diagonally, vertically or horizontally, or there is no winner and no move free squares in which to move (a draw)."@en ;
+    rdfs:seeAlso "http://dbpedia.org/resource/Tic-tac-toe"@en ;
+    rdfs:subClassOf tic-tac-toe:Event ;
+    owl:equivalentClass [ a owl:Class ;
+            owl:intersectionOf ( [ a owl:Restriction ;
+                        owl:onClass tic-tac-toe:OPlayerRole ;
+                        owl:onProperty tic-tac-toe:providesAgentRole ;
+                        owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] [ a owl:Restriction ;
+                        owl:onClass tic-tac-toe:XPlayerRole ;
+                        owl:onProperty tic-tac-toe:providesAgentRole ;
+                        owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] ) ] .
+
+tic-tac-toe:XPlayerRole a owl:Class ;
+    rdfs:subClassOf tic-tac-toe:AgentRole .
+
+<http://localhost:8083/Game/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> a tic-tac-toe:Game,
+        owl:NamedIndividual ;
+    tic-tac-toe:firstMove <http://localhost:8083/Square12/ca57ed3f-5f03-486d-8b61-b22a323e0b0d> ;
+    tic-tac-toe:hasID "ca57ed3f-5f03-486d-8b61-b22a323e0b0d" ;
+    tic-tac-toe:providesAgentRole <http://127.0.0.1:9000/NewPlayer>,
+        <http://127.0.0.1:9000/Opponent> .
+
+tic-tac-toe:Square a owl:Class .
+
+[] a owl:AllDisjointClasses ;
+    owl:members ( tic-tac-toe:Square11 tic-tac-toe:Square12 tic-tac-toe:Square13 tic-tac-toe:Square21 tic-tac-toe:Square22 tic-tac-toe:Square23 tic-tac-toe:Square31 tic-tac-toe:Square32 tic-tac-toe:Square33 ) .
+

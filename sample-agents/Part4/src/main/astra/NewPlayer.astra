@@ -1,0 +1,100 @@
+import mams.web.HttpResponse;
+import mams.JSONConverter;
+import mams.JSONBuilder;
+import astra.jena.*;
+import com.fasterxml.jackson.databind.JsonNode;
+agent NewPlayer extends Player {
+   types mirror {
+       formula opponent_last_move(string);    // Store opponent's last move
+       formula corner_map(string, string);    // Map for mirroring corners
+       formula edge_map(string, string);      // Map for mirroring edges
+   }
+
+   initial corner_map("11", "33");
+   initial corner_map("13", "31");
+   initial corner_map("31", "13");
+   initial corner_map("33", "11");
+   initial edge_map("12", "32");
+   initial edge_map("21", "23");
+   initial edge_map("23", "21");
+   initial edge_map("32", "12");
+
+
+/*
+This agent uses the mirror stategegy against to opponent
+
+*/
+   rule +!handle_move(string form_url, string method, string id) : game(id, string role, string opponent) {
+       // Track opponent's last move
+       foreach(move(string square, string player)) {
+           if(~strings.equal(player, role)) {
+               +opponent_last_move(square);
+           }
+       }
+
+       // Try mirror move
+       if(opponent_last_move(string opp_square)) {
+           // If opponent took center, take corner
+           if(strings.equal(opp_square, "22")) {
+               if(free("11")) {
+                   +last_move("11");
+               } else if(free("33")) {
+                   +last_move("33");
+               }
+           } 
+           // Mirror corners
+           else if(corner_map(opp_square, string mirror_square) & free(mirror_square)) {
+               +last_move(mirror_square);
+           }
+           // Mirror edges
+            else if(edge_map(opp_square,  mirror_square) & free(mirror_square)) {
+               +last_move(mirror_square);
+           }
+       }
+
+       // If can't mirror, take center or any free square
+       if(~last_move(string anyMove)) {
+           if(free("22")) {
+               +last_move("22");
+           } else {
+               !take_any_free();
+           }
+       }
+
+       if(last_move(string chosen_square)) {
+           console.println("Making mirror move to square: " + chosen_square);
+           JsonNode bodyJson = builder.createObject();
+           query(agent_attributes("@id", string agentURL));
+           builder.addProperty(bodyJson, "@id", agentURL);
+           string bodyStr = builder.toJsonString(bodyJson);
+
+           if (strings.equal(method, "POST")) {
+               MAMSAgent::!post(form_url, bodyStr, HttpResponse response);
+               console.println("Mirror move made at: " + chosen_square);
+           } else if (strings.equal(method, "PUT")) {
+               MAMSAgent::!put(form_url, bodyStr, HttpResponse response);
+               console.println("Mirror move made at: " + chosen_square);
+           }
+       }
+   }
+
+   rule +!take_any_free() {
+       if(free("11")) {
+           +last_move("11");
+       } else if(free("13")) {
+           +last_move("13");
+       } else if(free("31")) {
+           +last_move("31");
+       } else if(free("33")) {
+           +last_move("33");
+       } else if(free("12")) {
+           +last_move("12");
+       } else if(free("21")) {
+           +last_move("21");
+       } else if(free("23")) {
+           +last_move("23");
+       } else if(free("32")) {
+           +last_move("32");
+       }
+   }
+}

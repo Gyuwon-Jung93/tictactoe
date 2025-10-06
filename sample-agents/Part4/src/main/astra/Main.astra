@@ -1,0 +1,409 @@
+import mams.web.HttpResponse;
+import mams.JSONConverter;
+import mams.JSONBuilder;
+import astra.jena.*;
+import com.fasterxml.jackson.databind.JsonNode;
+
+agent Main extends Shared {
+   module KnowledgeStore knowledgeStore;
+   module Debug debug;
+
+   types players {
+       formula player(string, string);
+       formula game_started(string);
+       formula game_completed(string, string, string);
+       formula reregister();
+   }
+
+   types tournament {
+       formula current_pair(string, string);
+       formula tournament_score(string, int);
+       formula match_number(int);
+       formula match_complete(boolean);
+   }
+
+   types errors {
+       formula api_error_count(int);
+       formula api_unavailable(boolean);
+       formula player_timeout(string);
+   }
+   
+   initial api_index_url("http://localhost:8083/");
+   initial match_number(1);
+   initial match_complete(false);
+   initial api_error_count(0);
+   initial api_unavailable(false);
+
+    initial tournament_score("Better", 0);
+    initial tournament_score("Opponent", 0);
+    initial tournament_score("NewPlayer", 0);
+
+   rule +!main(list l) : api_index_url(string game_url) {
+       messaging.installService("mams", "mams.messaging.MAMSMessageService");
+       
+       MAMSAgent::!setup();
+       MAMSAgent::!created("base");
+       IntegratedInbox::!created("inbox");
+
+       system.createAgent("Better", "Player");
+       system.setMainGoal("Better", [game_url]);
+       system.createAgent("Opponent", "Player");
+       system.setMainGoal("Opponent", [game_url]);
+       system.createAgent("NewPlayer", "Player");
+       system.setMainGoal("NewPlayer", [game_url]);
+
+       +tournament_score("Better", 0);
+       +tournament_score("Opponent", 0);
+       +tournament_score("NewPlayer", 0);
+
+       system.sleep(2000);
+       !start_tournament();
+   }
+    /**
+    * Starts the tournament by:
+    * - Setting up initial player pairs based on match number
+    * - Initiating the first match setup
+    */
+   rule +!start_tournament() {
+       console.println("=== Tournament Starting ===");
+       foreach(match_number(int num)) {
+           if(num == 1) {
+               +current_pair("Better", "Opponent");
+           } else if(num == 2) {
+               +current_pair("Better", "NewPlayer");
+           } else if(num == 3) {
+               +current_pair("Opponent", "NewPlayer");
+           }
+       }
+       !setup_current_match();
+   }
+    /**
+     * Sets up each match by:
+     * - Re-registering players
+     * - Assigning X and O roles
+     * - Handling player availability
+     * - Initiating the game
+     */
+   rule +!setup_current_match() {
+    foreach(current_pair(string player1, string player2)) {
+        if(~player_timeout(player1) & ~player_timeout(player2)) {
+            system.sleep(1000);  // sleep
+            
+            // msg resend
+            send(inform, "http://127.0.0.1:9000/" + player1, reregister());
+            send(inform, "http://127.0.0.1:9000/" + player2, reregister());
+            
+            system.sleep(2000);  // sleep
+            
+            foreach(match_number(int num)) {
+                if(num == 1) {
+                    +player("ttt:XPlayerRole", "http://127.0.0.1:9000/Better");
+                    +player("ttt:OPlayerRole", "http://127.0.0.1:9000/Opponent");
+                    console.println("Match 1: Better(X) vs Opponent(O)");
+                } else if(num == 2) {
+                    +player("ttt:XPlayerRole", "http://127.0.0.1:9000/NewPlayer");
+                    +player("ttt:OPlayerRole", "http://127.0.0.1:9000/Better");
+                    console.println("Match 2: NewPlayer(X) vs Better(O)");
+                } else if(num == 3) {
+                    +player("ttt:XPlayerRole", "http://127.0.0.1:9000/Opponent");
+                    +player("ttt:OPlayerRole", "http://127.0.0.1:9000/NewPlayer");
+                    console.println("Match 3: Opponent(X) vs NewPlayer(O)");
+                }
+            }
+            !game();
+        } else {
+            console.println("Skipping match due to unavailable player(s)");
+            foreach(match_number(int num)) {
+                -match_number(num);
+                if(num < 3) {
+                    +match_number(num + 1);
+                    !start_tournament();
+                } else {
+                    !print_tournament_results();
+                }
+            }
+        }
+    }
+}
+
+    /**
+    * Manages the game initialization and API communication
+    * Includes error handling for API failures
+    */
+   rule +!game() : api_index_url(string game_url) {
+       try {
+           knowledgeStore.getKnowledge(game_url + "players", "JSON-LD");
+       } recover {
+           !handle_api_error(game_url + "players");
+       }
+   }
+
+    /**
+     * Handles API errors by:
+     * - Tracking error count
+     * - Implementing retry logic
+     * - Ending tournament if error threshold reached
+     */
+   rule +!handle_api_error(string endpoint) {
+       foreach(api_error_count(int count)) {
+           -api_error_count(count);
+           +api_error_count(count + 1);
+           
+           if(count >= 5) {
+               +api_unavailable(true);
+               console.println("API unavailable - ending tournament");
+               !print_tournament_results();
+           } else {
+               console.println("API error " + (count + 1) + "/5 - retrying...");
+               system.sleep(1000);
+               !game();
+           }
+       }
+   }
+
+    /**
+    * Processes player knowledge and sets up game registration
+    * Manages player role assignments and game configuration
+    */
+   rule $knowledgeStore.read(string url) : strings.endsWith(url, "players") {
+    foreach(form_actions(string oldForm, string oldMethod, list oldList)) {
+        -form_actions(oldForm, oldMethod, oldList);
+    }
+    foreach(player(string oldRole, string oldUrl)) {
+        -player(oldRole, oldUrl);
+    }
+
+    //  registerGame form register directly
+    string registerGameUrl = "http://localhost:8083/registerGame";
+    string method = "POST";
+    list required = ["ttt:XPlayerRole", "ttt:OPlayerRole"];
+    +form_actions(registerGameUrl, method, required);
+    
+    // player info add for current match
+    foreach(current_pair(string player1, string player2)) {
+        foreach(match_number(int num)) {
+            if(num == 1) {
+                +player("ttt:XPlayerRole", "http://127.0.0.1:9000/" + player1);
+                +player("ttt:OPlayerRole", "http://127.0.0.1:9000/" + player2);
+            } else if(num == 2) {
+                +player("ttt:XPlayerRole", "http://127.0.0.1:9000/NewPlayer");  // NewPlayer가 X
+                +player("ttt:OPlayerRole", "http://127.0.0.1:9000/Better");     // Better가 O
+            } else if(num == 3) {
+                +player("ttt:XPlayerRole", "http://127.0.0.1:9000/" + player1);
+                +player("ttt:OPlayerRole", "http://127.0.0.1:9000/" + player2);
+            }
+        }
+    }
+}
+    /**
+     * Handles game registration process:
+     * - Creates JSON payload for game registration
+     * - Manages HTTP communication
+     * - Processes registration response
+     */
+   rule +form_actions(string form_url, string http_method, list required_actions) : strings.endsWith(form_url, "registerGame") {
+    try {
+        console.println("===Before JSONNODE BODYJSON!!!====");
+        JsonNode bodyJson = builder.createObject();
+
+        boolean hasXPlayer = false;
+        boolean hasOPlayer = false;
+        
+        foreach(player(string role, string url)) {
+            if(strings.equal(role, "ttt:XPlayerRole")) hasXPlayer = true;
+            if(strings.equal(role, "ttt:OPlayerRole")) hasOPlayer = true;
+        }
+
+        if(~hasXPlayer | ~hasOPlayer) {
+            console.println("Missing required player roles!");
+        }
+
+        forall(string item : required_actions) {
+            if (strings.equal(item, "ttt:OPlayerRole") & player("ttt:OPlayerRole", string playerURL)) {
+                builder.addProperty(bodyJson, item, playerURL);
+                console.println("Added O player: " + playerURL);
+            }
+            if (strings.equal(item, "ttt:XPlayerRole") & player("ttt:XPlayerRole", string playerURL)) {
+                builder.addProperty(bodyJson, item, playerURL);
+                console.println("Added X player: " + playerURL);
+            }
+        }
+        
+        string bodyStr = builder.toJsonString(bodyJson);
+        console.println("Request body: " + bodyStr);
+        
+        if (strings.equal(http_method, "POST")) {
+            MAMSAgent::!post(form_url, bodyStr, HttpResponse response);
+            string responseBody = httpUtils.bodyAsString(response);
+            console.println("RegisterGame Response: " + responseBody);  // 응답 로깅 추가
+            knowledgeStore.getKnowledgeFromString(responseBody, form_url);
+            console.println("Sending POST request to register game...");
+        } else {
+            MAMSAgent::!put(form_url, bodyStr, HttpResponse response);
+            string responseBody = httpUtils.bodyAsString(response);
+            console.println("RegisterGame Response: " + responseBody);  // 응답 로깅 추가
+            console.println("Sending PUT request to register game...");
+            knowledgeStore.getKnowledgeFromString(responseBody, form_url);
+            console.println("Processing register game response...");
+        }
+        
+    } recover {
+        console.println("Failed to register game!");
+    }
+}
+
+   rule $knowledgeStore.read(string url) : strings.endsWith(url, "registerGame") {
+       if (ttt.hasID(url, string gameID)) {
+           console.println("Game ID is " + gameID);
+
+           foreach(game_started(string oldGameID)) {
+               -game_started(oldGameID);
+           }
+           +game_started(gameID);
+
+           if (player("ttt:XPlayerRole", string xPlayerURL)) {
+               if (player("ttt:OPlayerRole", string oPlayerURL)) {
+                   send(inform, xPlayerURL, game(gameID, "ttt:XPlayerRole", oPlayerURL));
+                   console.println("Sent game info to X player: " + xPlayerURL);
+                   
+                   send(inform, oPlayerURL, game(gameID, "ttt:OPlayerRole", xPlayerURL));
+                   console.println("Sent game info to O player: " + oPlayerURL);
+               }
+           }
+       }
+   }
+    /**
+     * Processes game completion:
+     * - Updates tournament scores
+     * - Determines winner
+     * - Manages tournament progression
+     * - Initiates next match or ends tournament
+     */
+   rule @message(inform, string sender, game_completed(string id, string player_uri, string result)) {
+    console.println("Game " + id + " completed. Player URI: " + player_uri + " Result: " + result);
+    
+    string playerName = "";
+    string opponent_uri = "";
+    
+    foreach(current_pair(string p1, string p2)) {
+        if(strings.contains(player_uri, p1)) {
+            opponent_uri = p2;
+        } else if(strings.contains(player_uri, p2)) {
+            opponent_uri = p1;
+        }
+    }
+    
+    if(strings.contains(player_uri, "Better")) {
+        playerName = "Better";
+    } else if(strings.contains(player_uri, "Opponent")) {
+        playerName = "Opponent"; 
+    } else if(strings.contains(player_uri, "NewPlayer")) {
+        playerName = "NewPlayer";
+    }
+    
+    if(strings.equal(result, "win")) {
+        foreach(tournament_score(playerName, int score)) {
+            -tournament_score(playerName, score);
+            +tournament_score(playerName, score + 1);
+            console.println("Updated score for " + playerName + ": " + (score + 1));
+        }
+    } else if(strings.equal(result, "lose")) {
+        string winner = "";
+        if(strings.contains(player_uri, "Better")) {
+            if(strings.contains(opponent_uri, "Opponent")) winner = "Opponent";
+            else winner = "NewPlayer";
+        } else if(strings.contains(player_uri, "Opponent")) {
+            if(strings.contains(opponent_uri, "Better")) winner = "Better";
+            else winner = "NewPlayer";
+        } else {
+            if(strings.contains(opponent_uri, "Better")) winner = "Better";
+            else winner = "Opponent";
+        }
+        
+        foreach(tournament_score(winner, int score)) {
+            -tournament_score(winner, score);
+            +tournament_score(winner, score + 1);
+            console.println("Updated score for winner " + winner + ": " + (score + 1));
+        }
+    }
+    
+    int match = 0;
+    foreach(match_number(int n)) {
+        match = n;
+    }
+    
+    if(match == 3) {
+        console.println("\n=== Tournament Results ===");
+        foreach(tournament_score("Better", int score1)) {
+            console.println("Better: " + score1 + " wins");
+        }
+        foreach(tournament_score("Opponent", int score2)) {
+            console.println("Opponent: " + score2 + " wins");
+        }
+        foreach(tournament_score("NewPlayer", int score3)) {
+            console.println("NewPlayer: " + score3 + " wins");
+        }
+        console.println("========================\n");
+    } else {
+        console.println("=== Tournament Starting ===");
+        -match_number(match);
+        +match_number(match + 1);
+        !start_next_match();
+    }
+}
+    /**
+     * Manages transition to next match:
+     * - Updates player pairs
+     * - Initiates new match setup
+     */
+    rule +!start_next_match() {
+        foreach(match_number(int num)) {
+            if(num == 2) {
+                -current_pair("Better", "Opponent");
+                +current_pair("Better", "NewPlayer");
+            } else if(num == 3) {
+                -current_pair("Better", "NewPlayer");
+                +current_pair("Opponent", "NewPlayer");
+            }
+        }
+        !setup_current_match();
+    }
+
+
+    /**
+     * Displays final tournament results:
+     * - Shows each player's score
+     * - Terminates the tournament
+     */
+    rule +!print_tournament_results() {
+        console.println("\n=== Tournament Results ===");
+        foreach(tournament_score(string playerName, int score)) {
+            console.println(playerName + ": " + score + " wins");
+        }
+        console.println("========================\n");
+        system.exit();
+    }
+
+    /**
+     * Cleans up tournament knowledge:
+     * - Clears stored data
+     * - Removes game states
+     * - Resets forms and links
+     */
+
+    rule +!clear_knowledge() {
+       knowledgeStore.clear();
+       foreach(form_actions(string anyForm, string method_name, list any_list)) {
+           -form_actions(anyForm, method_name, any_list);
+       }
+       foreach(link_actions(string anyLink)) {
+           -link_actions(anyLink);
+       }
+       foreach (game_started(string id)) {
+           -game_started(id);
+       }
+   }
+
+}
+
+   

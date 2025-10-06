@@ -1,0 +1,91 @@
+{
+    "@id": "http://localhost:8083/Board/test",
+    "@type": "ttt:Board",
+    "@context": {
+      "@vocab": "https://www.w3.org/2019/wot/hypermedia#",
+      "ttt": "http://localhost:8083/tic-tac-toe#",
+      "htv": "http://www.w3.org/2011/http#",
+      "wot": "https://w3c.github.io/wot-thing-description/#",
+      "sch":"https://schema.org/",
+      "links": {
+        "@id": "Link"
+      },
+      "forms": {
+        "@id": "Form"
+      },
+      "href": {
+        "@id": "hasTarget"
+      },
+      "rel": {
+        "@id": "hasRelationType",
+        "@type": "@vocab"
+      }
+    },
+    "ttt:hasSquare": [
+      {
+        "http://localhost:8083/Square11?test": {
+          "http://www.w3.org/1999/02/22-rdf-syntax-ns#type": "http://localhost:8083/tic-tac-toe#Square11",
+          "http://localhost:8083/tic-tac-toe#moveTakenBy": "http://localhost:8083/apibot"
+        }
+      },
+      {
+        "http://localhost:8083/Square12?test": {
+          "http://www.w3.org/1999/02/22-rdf-syntax-ns#type": "http://localhost:8083/tic-tac-toe#Square12",
+          "http://localhost:8083/tic-tac-toe#moveTakenBy": "http://localhost:9090/AgentOne"
+        }
+      }
+    ],"links": [
+        {
+          "href": "http://localhost:8083/",
+          "htv:methodName": "GET"
+        },
+        {
+          "href": "http://localhost:8083/Board/test",
+          "htv:methodName": "GET"
+        }
+      ],
+      "forms": [
+        {
+          "href": "http://localhost:8083/Square13/test",
+          "contentType": "application/json",
+          "htv:methodName": "PUT",
+          "wot:op": "writeproperty"
+        },
+        {
+          "href": "http://localhost:8083/Square21/test",
+          "contentType": "application/json",
+          "htv:methodName": "PUT",
+          "wot:op": "writeproperty"
+        },
+        {
+          "href": "http://localhost:8083/Square22/test",
+          "contentType": "application/json",
+          "htv:methodName": "PUT",
+          "wot:op": "writeproperty"
+        },
+        {
+          "href": "http://localhost:8083/Square23/test",
+          "contentType": "application/json",
+          "htv:methodName": "PUT",
+          "wot:op": "writeproperty"
+        },
+        {
+          "href": "http://localhost:8083/Square31/test",
+          "contentType": "application/json",
+          "htv:methodName": "PUT",
+          "wot:op": "writeproperty"
+        },
+        {
+          "href": "http://localhost:8083/Square32/test",
+          "contentType": "application/json",
+          "htv:methodName": "PUT",
+          "wot:op": "writeproperty"
+        },
+        {
+          "href": "http://localhost:8083/Square33/test",
+          "contentType": "application/json",
+          "htv:methodName": "PUT",
+          "wot:op": "writeproperty"
+        }
+    ]
+}
